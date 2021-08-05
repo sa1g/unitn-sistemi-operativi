@@ -1,0 +1,223 @@
+\section{Segnali}
+
+I \textbf{segnali} sono una forma limitata di \textbf{comunicazione inter-processo (IPC).} Un segnale è una \textbf{notifica asincrona inviata a un processo} o a un thread specifico all'interno dello stesso processo \textbf{per notificarlo di un evento}.
+
+Ci sono vari eventi che possono avvenire in maniera asincrona al normale flusso di un programma, alcuni dei quali in maniera inaspettata e non predicibile. Per Esempio, durante l'esecuzione di un programma ci può essere una richiesta di terminazione o di sospensione da parte di un utente, la terminazione di un processo figlio o un errore generico.
+
+Quando viene inviato un segnale, \textbf{il sistema operativo interrompe il normale flusso di esecuzione del processo di destinazione per fornire il segnale}. Se il processo ha precedentemente registrato un gestore di segnali, quella routine viene eseguita. In caso contrario, viene eseguito il gestore del segnale predefinito.\\
+Per ogni processo, all'interno della process table, vengono mantenute due liste:
+\begin{itemize}
+    \item \textbf{Pending signals}: \textbf{segnali emessi che il processo dovrà gestire} - sono segnali nello stato "D" (\textbf{uninterruptible sleep}). Solitamente perche' il processo e' in attesa (tipo di I/O). Questo sonno non puo' essere interrotto, nemmeno sigkill (da terminale \texttt{kill -9}) puo'. Il kernel attende che il processo si "risvegli" e il segnale viene consegnato.
+    \item \textbf{Blocked signals}: \textbf{segnali non comunicati al processo}. Ad ogni schedulazione del processo le due liste vengono controllate per consentire al processo di reagire nella maniera più adeguata.
+\end{itemize}
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{c|c|c}\textbf{}
+     \textbf{SIGXXX} &\textbf{description} & \textbf{default} \\ \\\ 
+     \textbf{SIGALRM} & \textit{alarm} \textit{clock} & quit \\
+     \textbf{SIGCHLD} & \textit{child} \textit{terminated} &ignore \\
+     \textbf{SIGCONT} & \textit{continue, if stopped} & ignore \\
+     \textbf{SIGINT} & \textit{terminal interrupt, CTRL + C} & quit \\
+     \textbf{SIGKILL} & \textit{kill process}& quit \\
+     \textbf{SIGSYS} & \textit{bad argument to syscall} & quit with dump \\
+     \textbf{SIGTERM} & \textit{software termination} & quit \\ 
+     \textbf{SIGUSR1/2 }& \textit{user signal 1/2} & quit \\
+     \textbf{SIGSTOP} & \textit{stopped} & quit \\
+     \textbf{SIGTSTP} & \textit{terminal stop, CTRL + Z} & quit
+\end{tabular}
+    \caption{Alcuni Segnali}
+    \label{tab:my_label}
+\end{table}
+
+\subsection{Gestione dei segnali}
+I segnali sono \textbf{simili agli interrupt}, con la differenza che gli interrupt sono mediati dal processore e gestiti dal kernel mentre \textbf{i segnali sono mediati dal kernel e gestiti dai processi}. 
+Come per gli interrupts, \textbf{il programma può decidere come gestire l'arrivo di un segnale} (presente nella \textbf{lista pending}):
+\begin{itemize}
+    \item \textbf{Eseguendo l'azione default}
+    \item \textbf{Ignorandolo} (non sempre possibile) → programma prosegue normalmente
+    \item \textbf{Eseguendo un handler personalizzato} → programma si interrompe
+\end{itemize}
+
+\subsection{Default handler}
+Ogni segnale ha un suo handler di default che tipicamente può:
+\begin{itemize}
+    \item Ignorare il segnale
+    \item Terminare il processo
+    \item Continuare l'esecuzione (se il processo era in stop)
+    \item Stoppare il processo
+\end{itemize}
+
+\textbf{Ogni processo può sostituire il gestore di default con una funzione “custom”} (a parte per \texttt{SIGKILL e SIGSTOP}) e comportarsi di conseguenza. La sostituzione avviene tramite la \textbf{system call \texttt{signal()}}\newline\newline
+Libreria \texttt{“signal.h”} $|$ \href{https://www.tutorialspoint.com/c_standard_library/c_function_signal.htm}{Info Libreria}. $\|$ \href{https://linux.die.net/man/2/signal}{LINUXDIE}
+    \paragraph{signal() system call}\hfill \break
+\begin{lstlisting}[language=C]
+    sighandler_t signal(int signum, sighandler_t handler);
+    typedef void (*sighandler_t)(int);
+\end{lstlisting}
+
+\paragraph{Esempio 13: signal()}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio13_signal.c}
+
+\paragraph{Esempio 14: (premo CTRL+C durante l'esecuzione)}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio14_premiCtrlC.c}
+
+\paragraph{Esempio 15:} \hfill \break
+\lstinputlisting[language=C]{Cap2/esempio15_CST.c}
+\lstinputlisting[language=C]{Cap2/esempio15_DFL.c}
+\lstinputlisting[language=C]{Cap2/esempio15_IGN.c}
+
+\subsection{Custom Handler}
+Un handler personalizzato deve essere una funzione di tipo void che accetta come argomento un intero, il quale rappresenta il segnale catturato. Questo consente l'utilizzo di uno stessa handler per segnali differenti.\\
+\begin{lstlisting}[language=C]
+    #include <signal.h> <stdio.h> //param.c
+    void myHandler(int sigNum){
+        if(sigNum == SIGINT) printf("CTRL+C\n");
+        else if(sigNum == SIGTSTP) printf("CTRL+Z\n");
+    }
+    signal(SIGINT,myHandler); 
+    signal(SIGTSTP,myHandler);
+\end{lstlisting}
+    \paragraph{signal() return} Signal() restituisce un riferimento all'handler che era precedentemente assegnato al segnale:
+\begin{itemize}
+    \item NULL: handler precedente era l'handler di default
+    \item 1: l'handler precedente era SIG$\_$IGN
+    \item address: l'handler precedente era *(address)
+\end{itemize}
+\paragraph{Esempio 6:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio16.c}
+
+\paragraph{Esempio 17: oggi, riguardare i process ID di padre e figlio se metto printf("$\%$d",child);}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio17.c}
+
+\subsection{Inviare i segnali: kill()}
+
+\paragraph{kill()} 
+\texttt{int kill(pid$\_$t pid, int sig);}\\
+Invia un segnale ad uno o più processi a secondo dell'argomento pid:
+\begin{itemize}
+    \item pid $>$ 0: segnale al processo con PID=pid
+    \item pid = 0: segnale ad ogni processo dello stesso gruppo
+    \item pid = -1: segnale ad ogni processo possibile (stesso UID/RUID)
+    \item pid $<$ -1: segnale ad ogni processo del gruppo |pid|Restituisce 0 se il segnale viene inviato, -1 in caso di errore.
+\end{itemize}
+Ogni tipo di segnale può essere inviato, non deve essere necessariamente un segnale corrispondente ad un evento effettivamente avvenuto!
+\paragraph{Esempio 8:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio18.c}
+
+\href{https://aljensencprogramming.wordpress.com/2014/05/15/the-kill-function-in-c/}{altri esempi} \\
+\href{https://stackoverflow.com/questions/6501522/how-to-kill-a-child-process-by-the-parent-process}{come uccidere un figlio dal processo genitore}
+\paragraph{Kill da bash} kill è un programma bash che accetta come primo argomento il tipo di segnale e come secondo argomento il PID del processo. Per maggiori info (da terminale) \texttt{man kill} per info su kill, \texttt{man signal} per informazioni sui segnali.\\
+\paragraph{Esempio 19:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio19.c}
+
+\subsection{Programmare un alarm: alarm()}
+\texttt{unsigned int alarm(unsigned int seconds);}\\
+La funzione alarm () viene utilizzata per generare un segnale SIGALRM dopo che è trascorso un periodo di tempo specificato.
+
+La funzione richiede come argomento i secondi. Dopo che sono trascorsi tot secondi dalla richiesta della funzione alarm(), viene generato il segnale SIGALRM. Il comportamento predefinito al ricevimento di SIGALRM è di terminare il processo. Ma possiamo catturare e gestire il segnale come preferiamo.
+
+La funzione alarm() restituirà un valore diverso da zero, se un altro allarme è stato precedentemente impostato e il valore è il numero di secondi rimanenti per il precedente avviso programmato dovuto alla consegna. Altrimenti alarm() restituirà zero.\\
+\href{https://linuxhint.com/sigalarm_alarm_c_language/}{altri esempi e un po' di WIKI} $\|$ \href{https://www.man7.org/linux/man-pages/man2/alarm.2.html}{MANPAGE}
+
+\paragraph{Esempio 20:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio20_alarm.c}
+
+\paragraph{Esempio 21:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio21.c}
+
+\subsection{Mettere in pausa: pause()}
+\texttt{int pause();}
+Sospende l'esecuzione del thread chiamante. Il thread non riprende l'esecuzione finché non viene consegnato un segnale e viene eseguito un gestore di segnale o terminato il thread.
+
+Se un segnale non bloccato in arrivo termina il thread, pause() non torna mai al chiamante. Se un segnale in arrivo è gestito da un gestore di segnali, pause() ritorna dopo che il gestore di segnali è tornato.
+
+Se pause () ritorna, restituisce sempre -1 e imposta errno su EINTR, indicando che un segnale è stato ricevuto e gestito con successo.
+
+\href{https://www.ibm.com/docs/en/zos/2.1.0?topic=functions-pause-suspend-process-pending-signal}{da IBM} $\|$ \href{https://man7.org/linux/man-pages/man2/pause.2.html}{MANPAGE}
+
+\paragraph{Esempio 22:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio22_pause.c}
+
+\subsection{Bloccare i segnali}
+Si considera la lista dei “blocked signals”, i segnali ricevuti dal processo ma volutamente non gestiti.
+
+Mentre i segnali ignorati non saranno mai gestiti, i segnali bloccati sono solo temporaneamente non gestiti. Un segnale bloccato rimane nello stato \textit{pending} fino a quando esso non \textbf{viene gestito} oppure il suo handler tramutato in ignore. L'insieme dei segnali bloccati è detto \textbf{"signal mask”, una maschera dei segnali che è modificabile attraverso} la system call \texttt{sigprocmask()}\\ \href{https://www.gnu.org/software/libc/manual/html_node/Process-Signal-Mask.html}{altre info} | \href{https://www.man7.org/linux/man-pages/man2/sigprocmask.2.html}{MANPAGE}
+
+\paragraph{sigset$\_$t} 
+Una signal mask può essere gestita con un \texttt{sigset$\_$t}, una lista di segnali modificabile con alcune funzioni (non modificano maschera dei segnali del processo).
+\begin{table}[ht]
+    \begin{tabular}{l|l}\textbf{}
+int sigemptyset(sigset$\_$t *set); & Svuota \\
+int sigfillset(sigset$\_$t *set);  & Riempie \\
+int sigaddset(sigset$\_$t *set, int signo); & Aggiunge singolo  \\
+int sigdelset(sigset$\_$t *set, int signo); & Rimuove singolo \\
+int sigismember(const sigset$\_$t *set, int signo); & Interpella
+\end{tabular}
+    \caption{Alcune funzioni \texttt{sigset$\_$t}}
+\end{table}
+
+\paragraph{sigprocmask()}
+\texttt{int sigprocmask(int how, const sigset$\_$t *restrict set, sigset$\_$t *restrict oldset);}\\
+A seconda del valore di how e di set, la maschera dei segnali del processo viene cambiata. Nello specifico:
+\begin{itemize}
+    \item \textbf{how = SIG$\_$BLOCK}: i segnali in set sono aggiunti alla maschera;
+    \item \textbf{how = SIG$\_$UNBLOCK}: i segnali in set sono rimossi dalla maschera;
+    \item \textbf{how = SIG$\_$SETMASK}: set diventa la maschera.
+\end{itemize}
+Se oldset non è nullo, in esso verrà salvata la vecchia maschera. oldset viene riempito anche se set è nullo.\\
+\href{https://www.ibm.com/docs/en/ztpf/1.1.0.15?topic=apis-sigprocmaskexamine-change-blocked-signals}{da IBM, leggere assolutamente}\\
+\paragraph{Esempio 23:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio23.c}
+
+\paragraph{Esempio 24:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio25_sigpending.c}
+
+\subsection{Verificare pending signals: sigpending()}
+\texttt{sigpending()} restituisce l'insieme di segnali che sono in attesa di consegna al thread chiamante (cioè, i segnali che sono stati ricevuti mentre erano bloccati).\\
+\paragraph{Esempio 25:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio24_sigpromask.c}
+
+\paragraph{sigaction() - sintetizzare}
+%da sintetizzare
+Esamina e modifica l'azione associata a un segnale specifico.
+
+int sig è il numero di un segnale riconosciuto. sigaction () esamina e imposta l'azione da associare a questo segnale. Vedere la Tabella 1 per i valori di sig, nonché i segnali supportati dai servizi z / OS® UNIX. L'argomento sig deve essere una delle macro definite nel file di intestazione signal.h.
+
+const struct sigaction * new può essere un puntatore NULL. In tal caso, sigaction () determina semplicemente l'azione attualmente definita per gestire sig. Non cambia questa azione. Se new non è NULL, dovrebbe puntare a una struttura sigaction. L'azione specificata in questa struttura diventa la nuova azione associata a sig.
+
+struct sigaction * old punta a una posizione di memoria in cui sigaction () può memorizzare una struttura sigaction. sigaction () utilizza questa posizione di memoria per memorizzare una struttura sigaction che descrive l'azione attualmente associata a sig. old può anche essere un puntatore NULL, nel qual caso sigaction () non memorizza queste informazioni.
+
+Questa funzione è supportata solo in un programma POSIX.
+Comportamento speciale per C ++:
+
+    Il comportamento quando si combina la gestione del segnale con la gestione delle eccezioni C ++ non è definito. Inoltre, l'uso della gestione del segnale con costruttori e distruttori non è definito.
+    Le convenzioni di collegamento del linguaggio C ++ e C non sono compatibili e pertanto sigaction () non può ricevere puntatori a funzione C ++. Se si tenta di passare un puntatore a funzione C ++ a sigaction (), il compilatore lo contrassegna come errore. Pertanto, per utilizzare la funzione sigaction () nel linguaggio C ++, è necessario assicurarsi che le routine di gestione dei segnali stabilite abbiano un collegamento C, dichiarandole come "C" esterno.
+
+\href{https://www.ibm.com/docs/en/zos/2.4.0?topic=functions-sigaction-examine-change-signal-action}{da IBM}$|$\href{https://linux.die.net/man/2/sigaction}{linux.die.net}
+
+\begin{lstlisting}[language=C]
+    int sigaction(int signum, const struct sigaction *restrict act,
+    struct sigaction *restrict oldact);
+    
+    struct sigaction {
+        void (*sa_handler)(int);
+        void (*sa_sigaction)(int, siginfo_t *, void *);
+        sigset_t sa_mask; //Signals blocked during handlerint sa_flags; 
+        //modify behaviour of signal
+        void (*sa_restorer)(void); //Deprecated
+\end{lstlisting}
+
+\paragraph{Esempio 26:}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio26_sigaction.c}
+
+\paragraph{Esempio 27: blocking signal}\hfill \break
+\lstinputlisting[language=C]{Cap2/esempio27.c}
+
+\paragraph{Esempio 28: blocking signal} \hfill \break
+\lstinputlisting[language=C]{Cap2/esempio28.c}
+
+\paragraph{Esempio 29: sa$\_$sigaction}\hfill \break\lstinputlisting[language=C]{Cap2/esempio29.c}
+
+
+
+\paragraph{easter egg} Trova le applicazioni per signal.h (\href{http://manpages.ubuntu.com/manpages/trusty/man7/signal.h.7posix.html}{UBUNTU MAN PAGE})

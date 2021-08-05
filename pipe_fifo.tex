@@ -1,0 +1,178 @@
+\section{Pipe e FIFO}
+    \subsection{Error in C}
+    Durante l'esecuzione di un programma ci possono essere diversi tipi di errori: 
+    \begin{itemize}
+        \item system calls che falliscono
+        \item divisioni per zero
+        \item problemi di memoria
+        \item ...
+    \end{itemize}
+    Alcuni di questi errori non fatali, come una system call che fallisce, possono essere indagati attraverso la variabile \texttt{errno}. Questa variabile globale contiene l'ultimo codice di errore generato dal sistema. 
+    
+    Libreria utilizzata: \texttt{errno.h} - \href{https://www.tutorialspoint.com/c_standard_library/errorno_h.htm}{DOC1}
+    
+    Usiamo le funzioni:
+    \begin{itemize}
+        \item \texttt{char *strerror(int errnum)} converte il codice di errore in una stringa comprensibile
+        \item \texttt{void perror(const char *str)} stampa su stderr la stringa passatagli come argomento e vi prepende l'output di strerror
+    \end{itemize}
+    
+    La libreria presenta anche delle variabili globali che rappresentano il tipo d'errore:
+    \begin{itemize}
+        \item \textbf{EDOM} - rappresenta un errore di dominio, che si verifica se un argomento di input è esterno al dominio (esempio 1)
+        \item \textbf{ERANGE} - rappresenta un errore di intervallo, che si verifica se un argomento di input è al di fuori dell'intervallo (esempio 2)
+        \item \href{https://www.ibm.com/docs/en/zos/2.1.0?topic=files-errnoh}{altre macro (IBM)}
+    \end{itemize}
+ \paragraph{Esempio 33 - EDOM} \hfill \break{}   
+ \lstinputlisting[language=C]{Cap4/esempio33.c}
+ 
+\paragraph{Esempio 34 - ERANGE} \hfill \break{}
+\lstinputlisting[language=C]{Cap4/esempio34.c}
+    
+    \paragraph{Esempio 35: errore apertura file} \hfill \break{}
+\lstinputlisting[language=C]{Cap4/esempio35.c}
+    
+    \paragraph{Esempio 36: errore processo non esistente}
+    \lstinputlisting[language=C]{Cap4/esempio36.c}
+    \subsection{Piping (def)}
+    Una pipeline o data pipeline, è un insieme di elementi di elaborazione dati collegati in serie, dove l'output di un elemento è l'input di quello successivo. Gli elementi di una pipeline vengono spesso eseguiti in parallelo o in modo suddiviso nel tempo. 
+    
+    Si possono utilizzare le Pipe concatenando programmi tramite $\|$ in fase di chiamata.
+
+\paragraph{Esempio 37: utilizzo di una pipe} \hfill
+    \lstinputlisting[language=C]{Cap4/esempio37A.c}
+    \lstinputlisting[language=C]{Cap4/esempio37b.c}
+ 
+    \subsection{Pipe anonime}
+        %def
+        Una pipe anonima è un canale di \textbf{comunicazione FIFO}  che può essere utilizzato per la comunicazione interprocesso (IPC) \textbf{unidirezionale}. Un'implementazione è spesso integrata nel sottosistema di I / O file del sistema operativo. 
+        
+        In genere un programma padre apre pipe anonime e crea un nuovo processo che eredita le altre estremità delle pipe o crea diversi nuovi processi e li dispone in una pipeline. Il collegamento avviene utilizzando \textbf{file  descriptors} (motivo per cui serve l'antenato comune).
+        
+        Libreria utilizzata: \texttt{unistd.h}
+        \subsubsection{Creazione e scrittura di pipe - pipe()}
+        Funzione: \texttt{int pipe (int pipefd[2])}
+        
+        La funzione pipe crea una pipe e inserisce i descrittori di file per le estremità di lettura e scrittura della pipe (rispettivamente) in pipefd[0] e pipefd[1] (corrispondono a stdin e stdout).
+
+         In caso di esito positivo, la pipe restituisce 0; in caso di errore, restituisce -1. I codici di errore \texttt{errno} sono:
+    \begin{itemize}
+        \item \textbf{EMFILE} Il processo ha troppi file aperti.
+        \item \textbf{ENFILE} Sono presenti troppi file aperti nell'intero sistema.
+    \end{itemize}
+
+    \paragraph{Esempio 38: Creazione pipe} \hfill \break{}
+\lstinputlisting[language=C]{Cap4/esempio38.c}
+    
+    \subsubsection{Lettura di pipe - read()}
+    \texttt{int read(int fd[0],char * data, int num)}\\
+    Tenta di leggere fino al conteggio dei byte dal descrittore di file fd nel buffer a partire da buf.
+    Sui file che supportano la ricerca, l'operazione di lettura inizia dall'offset del file.
+        
+    
+    La lettura della pipe tramite il comando read restituisce valori differenti a seconda della situazione:
+    \begin{itemize}
+        \item In caso di successo restituisce il numero di bytes effettivamente letti
+        \item Se il lato di scrittura è stato chiuso (da ogni processo) ed il buffer è vuoto restituisce 0
+        \item Se il buffer è vuoto ma il lato di scrittura è ancora aperto (in qualche processo) il processo si sospende fino alla disponibilità dei dati o alla chiusura
+        \item Se si provano a leggere più bytes (num) di quelli disponibili, vengono recuperati solo quelli presenti
+        \item In caso di errore, viene restituito -1 e viene impostato \texttt{errno}.
+    \end{itemize}
+    \href{https://man7.org/linux/man-pages/man2/read.2.html}{MANPAGE}
+    
+    \paragraph{Esempio 39: lettura pipe}\hfill \break
+    \lstinputlisting[language=C]{Cap4/esempio39.c}
+    
+    \subsubsection{Lettura pipe - write()}
+       
+    \texttt{int write(int fd[0],char * data, int num)}
+    
+    La funzione \texttt{write()} scrive i dati da un buffer dichiarato dall'utente su un determinato dispositivo, come un file. E' il modo principale per produrre dati da un programma utilizzando direttamente una chiamata di sistema. La destinazione è identificata da un codice numerico. I dati da scrivere, ad esempio un pezzo di testo, sono definiti da un puntatore e da una dimensione, espressa in numero di byte. \href{https://en.wikipedia.org/wiki/Write_(system_call)}{WIKI}
+    
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{c|l}\textbf{}
+    \textbf{Argument} &	\textbf{Description} \\ \\
+    \textbf{fd} & It is the file descriptor which has been obtained from the call to open. It is an integer \\ 
+     & value. The values 0, 1, 2 can also be given, for standard input, standard output $\&$ \\ 
+     & standard error, respectively . \\
+    \textbf{data} & It points to a character array, with content to be written to the file pointed to by fd. \\
+    \textbf{num} & It specifies the number of bytes to be written from the character array into the \\
+     & file pointed to by fd.\\ 
+\end{tabular}
+    \caption{Argomenti \texttt{write()}}
+    \label{tab:tab3}
+\end{table}
+\subsection{Gestione dei segnali}
+    
+    
+    \texttt{int fcntl(int fd, cmd, arg;}
+    Letteralmente \textbf{File Control}.
+    
+    Apre il descrittore di file fd. Può accettare un terzo argomento opzionale. \href{https://man7.org/linux/man-pages/man2/fcntl.2.html}{MANPAGE}
+    \newline
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{c l}
+    \textbf{F$\_$DUPFD} 
+            &    duplica il descrittore di file fd usando il numero più basso descrittore di file \\
+            &    disponibile maggiore o uguale a arg. Questo è diverso da dup2 (2), che utilizza \\
+            &    esattamente l'estensione descrittore di file specificato. In caso di successo, \\
+            &    viene restituito il nuovo descrittore di file. \\
+    
+    \textbf{F$\_$GETFD} & Restituisce (come risultato della funzione) i flag del descrittore \\
+            &    di file; arg viene ignorato. \\
+    
+    \textbf{F$\_$SETFD} & Imposta i flag del descrittore di file sul valore specificato da\\
+            &   arg. \\
+    
+\end{tabular}
+    \caption{Alcuni cmd}
+    \label{tab:tab4}
+\end{table}
+    
+    \paragraph{Esempio 40: comunicazione bidirezionale} \hfill \break
+    Un tipico esempio di comunicazione unidirezionale tra un processo scrittore P1 ed un processo lettore P2 è il seguente:
+    \begin{enumerate}
+        \item P1 crea una pipe()
+        \item P1 esegue un fork() e crea P2
+        \item P1 chiude il lato lettura: close(fd[0])
+        \item P2 chiude il lato scrittura: close(fd[1])
+        \item P1 e P2 chiudono l'altro fd appena finiscono.
+    \end{enumerate}
+    \lstinputlisting[language=C]{Cap4/esempio40.c}
+    
+    \paragraph{Esempio 41: bidirezionale}\hfill \break
+    Un tipico esempio di comunicazione bidirezionale tra un processo scrittore P1 ed un processo lettore P2 è il seguente:
+    \begin{enumerate}
+        \item P1 crea duepipe(), pipe1 e pipe2
+        \item P1 esegue un fork() e crea P2
+        \item P1 chiude il lato lettura di pipe1 ed il lato scrittura di pipe2
+        \item P2 chiude il lato scrittura di pipe1 ed il lato lettura di pipe2
+        \item P1 e P2 chiudono gli altri fd appena finiscono di comunicare.
+    \end{enumerate}
+    \lstinputlisting[language=C]{Cap4/esempio41.c}
+    
+    \subsubsection{Gestire la comunicazione}
+    Per gestire comunicazioni complesse c'è bisogno di definire un “protocollo”, ad esempio:
+    \begin{itemize}
+        \item Messaggi di lunghezza fissa (magari inviata prima del messaggio)
+        \item Marcatore di fine messaggio (per esempio con carattere NULL o newline)Più in generale occorre definire la sequenza di messaggi attesi
+    \end{itemize}
+
+    \paragraph{Esempio 42:-MAYBE ERR- redirige lo stdout di cmd1 sullo stdin di cmd2} \hfill \break
+ \lstinputlisting[language=C]{Cap4/esempio42.c}
+
+    \subsection{Pipe con nome (FIFO)}
+        %def
+    Le pipe con nome, o FIFO, corrispondono a dei file speciali nel filesystem grazie ai quali i processi, senza vincoli di gerarchia, possono comunicare. Un processo può accedere ad una di queste pipe se ha i permessi sul file corrispondente ed è vincolato, ovviamente, all'esistenza del file stesso.Essendo oggetti nel file system, si possono usare le funzioni di scrittura/lettura dei file viste nelle scorse lezioni. Una volta creata una pipe con nome, il file associato è persistente!NB: al contrario di un normale file, una FIFO deve essere aperta da entrambi i lati per potervi interagire in modo ragionevole.
+        \subsubsection{Esempio 43: Creazione Pipe}
+        \texttt{int mkfifo(const char *pathname, mode$\_$t mode);} %SPIEGARE LA FUNZIONE MKFIFO
+            \lstinputlisting[language=C]{Cap4/esempio43.c}
+            \paragraph{Esempio 44: writer} \hfill \break
+               \lstinputlisting[language=C]{Cap4/esempio44.c}
+            
+            \paragraph{Esempio 45: reader}\hfill \break
+               \lstinputlisting[language=C]{Cap4/esempio44.c}
+            

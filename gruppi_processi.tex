@@ -1,0 +1,60 @@
+\section{Gruppi di processi}
+\subsection{Gestione processi in Unix}
+All'interno di Unix i processi vengono raggruppati secondi vari criteri, dando vita a sessioni, gruppi e threads.
+I process groups consentono una migliore gestione dei segnali e della comunicazione tra i processi. Un processo, per l'appunto, può:
+\begin{itemize}
+    \item Aspettare  che  tutti  i  processi  figli  appartenenti  ad  un determinato  gruppo terminino;
+    \item Mandare un segnale a tutti i processi appartenenti ad un determinato gruppo.
+\end{itemize}
+Esempio di utilizzo dei gruppi:
+\begin{lstlisting}[language=C]
+    waitpid(-33,NULL,0); // Wait for a children in group 33
+    kill(-33,SIGTERM); // Send SIGTERM to all children in group 33
+\end{lstlisting}
+Mentre, generalmente, una sessione è collegata ad un terminale, i processi vengono raggruppati nel seguente modo:
+\begin{itemize}
+    \item In bash, processi concatenati tramite pipes appartengono allo stesso gruppo: \begin{verbatim}
+    cat /tmp/ciao.txt | wc -l | grep '2'
+    \end{verbatim}
+    \item Alla loro creazione, i figli di un processo ereditano il gruppo del padre
+    \item Inizialmente, tutti i processi appartengono al gruppo di 'init', ed ogni processo può cambiare il suo gruppo in qualunque momento.
+\end{itemize} 
+Il processo il cui PID è uguale al proprio GID è detto process group leader.
+
+\subsection{Group System Calls}
+\texttt{int setpgid(pid$\_$t pid, pid$\_$t pgid); //set GID of proc. (0=self)} \href{https://www.man7.org/linux/man-pages/man3/setpgid.3p.html}{MANPAGE}\\
+La funzione setpgid() deve unirsi a un processo esistente
+o creare un nuovo gruppo di processi all'interno della sessione di
+processo di chiamata.
+
+L'ID del gruppo di processi di un leader di sessione non deve cambiare.
+
+In caso di completamento con esito positivo, l'ID del gruppo di processi che corrisponde a pid deve essere impostato su pgid.
+
+Dopo il completamento con successo, setpgid() restituirà 0; altrimenti,
+-1 e errno deve essere impostato per indicare l'errore.\\
+       
+\texttt{pid$\_$t getpgid(pid$\_$t pid); // get GID of process (0=self)} \href{https://www.man7.org/linux/man-pages/man3/getpgid.3p.html}{MANPAGE}\\
+La funzione getpgid() restituirà l'ID del gruppo di processi del file
+processo il cui ID processo è uguale a pid. Se pid è uguale a 0,
+getpgid() restituirà l'ID del gruppo di processi della chiamata
+processi.
+
+Dopo il completamento con successo, getpgid() restituirà il process ID del gruppo. Altrimenti, restituirà (pid$\_$t) -1 e imposterà errno per indicare l'errore. \\
+ \paragraph{Esempio 30:}\hfill \break
+\lstinputlisting[language=C]{Cap3/esempio30.c}
+
+\paragraph{Esempio 31, Mandare segnali ai gruppi:}\hfill \break
+\lstinputlisting[language=C]{Cap3/esempio31.c}
+
+\begin{enumerate}
+    \item Processo 'ancestor' crea un figlioa.Il figlio cambia il proprio gruppo e genera 3 figli (Gruppo1)b.I 4 processi aspettano fino all'arrivo di un segnale
+    \item Processo 'ancestor' crea un secondo figlioa.Il figlio cambia il proprio gruppo e genera 3 figli (Gruppo2)b.I 4 processi aspettano fino all'arrivo di un segnale
+    \item Processo 'ancestor' manda due segnali diversi ai due gruppi
+\end{enumerate}
+
+
+\paragraph{Esempio 32, Wait figli in un gruppo:}\hfill \break
+\lstinputlisting[language=C]{Cap3/esempio32.c}
+
+\href{https://linux.die.net/man/2/setpgid}{more info}

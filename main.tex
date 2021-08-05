@@ -1,0 +1,115 @@
+\documentclass[a4paper]{article}
+
+%DOCUMENT SETTINGS
+\title{\huge LabSO appunti\par}
+%\author{Ettore Saggiorato}
+\author{\makebox[.9\textwidth]{\Large Ettore Saggiorato\par}\\ \and Enrico M.\\ \and Alberto Z.\\ \\  %\and Co-Author3\\Dept\\ School
+}
+
+\date{AA 2020-2021}
+
+
+\setcounter{tocdepth}{4}
+\setcounter{secnumdepth}{3}
+%RIGA 60-61
+
+%used packets
+\usepackage{verbatim} 
+\usepackage[utf8]{inputenc}
+\usepackage{listings}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{xcolor}
+
+%packets settings
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdftitle={Overleaf Example},
+    pdfpagemode=FullScreen,
+    }
+    
+\definecolor{comment}{rgb}{0.5,0.5,0.5}
+\definecolor{string_literal}{rgb}{0,0.5,0}
+\definecolor{keyword}{rgb}{0.3,0.3,0.7}
+\lstdefinestyle{C_code}{
+    commentstyle=\color{comment},
+    stringstyle=\color{string_literal},
+    keywordstyle=\color{keyword},
+    showstringspaces=false,
+    showtabs=false,
+    basicstyle=\ttfamily\small,
+    numbers=left
+}
+
+
+%DOCUMENT
+\begin{document}
+\lstset{style=C_code}
+%FIRST PAGE
+\pagenumbering{gobble}
+\maketitle
+\clearpage
+
+%EMPTY PAGE
+%\newpage
+%\thispagestyle{empty}
+%\hfill \break{}
+%\newpage
+
+%readme
+\pagenumbering{roman}
+\paragraph{README} 
+\textbf{LAST EDIT}: \today
+\\
+Il documento e' un WORK IN PROGRESS
+\\
+Questi appunti sono arricchiti di link per approfondire i vari argomenti. E' fondamentale la conoscenza della lingua inglese.\\
+Ho cercato di arricchire il documento il piu possibile per rendere lo studio completo. Se trovi errori sei pregato/a di contattarmi. \\
+Sono stati inseriti molti link alle varie manpage, ne saranno aggiunti in futuro altri durante le riletture/modifice del documento. \\
+Alcune spiegazioni (principalmente per questioni di tempo) sono state tradotte da manpage e documentazioni varie ed arricchite di quello che ho ritenuto piu' utile.\\\break{}
+
+\textbf{UPDATE 27/02/2021} Pubblicazione documento. In futuro saranno modificati gli esempi con file .c linkati (cosi' sara' piu' facile comprendere, studiare e giocare con questi. Saranno aggiunti anche altri esempi.\break{}
+\textbf{UPDATE 27/07/2021} Gli esempi C nel documento sono i file .c presenti nel progetto GitHub. Corretti alcuni errori. Pubblicazione del codice .tex (
+
+\clearpage
+%TABLE OF CONTENTS
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+\input{systemcalls_forking}
+\clearpage
+\input{signals}
+\clearpage
+\input{gruppi_processi}
+\clearpage
+\input{pipe_fifo}
+\clearpage
+\input{message_queue_threads}
+
+
+\clearpage
+\section{Esercizi}
+\subsection{Cap1}
+Scrivere dei programmi in C che:
+\begin{itemize}
+    \item Avendo come argomenti dei “binari”, si eseguono con exec ciascuno in un sottoprocesso (*)
+    \item idem punto 1 ma in più salvando i flussi di stdout e stderr in un unico file (*)
+    \item Dati due eseguibili come argomenti del tipo ls e wc si eseguono in due processi distinti: il primo deve generare uno stdout redirezionato su un file temporaneo, mentre il secondo deve essere lanciato solo quando il primo ha finito leggendo lo stesso file come stdin.Ad esempio ./main ls wc deve avere lo stesso effetto di ls $|$ wc.
+\end{itemize}
+
+Suggerimenti: anziché due figli usare padre-figlio- usare dup2 per far puntare il file descriptor del file temporaneo su stdout in un processo e stdin nell'altro sfruttare wait per attendere la conclusione del processo che genera l’output\\(*) generando DUE figli.
+
+\clearpage
+\section{Link utili}
+\begin{itemize}
+  \item \tt{\href{https://digilander.libero.it/uzappi/C/librerie/C-unistd.html}{libreria unistd.h}}
+  \item \href{http://manpages.ubuntu.com/manpages/trusty/man7/signal.h.7posix.html}{signal.h da DOC Ubuntu}
+  \item \href{https://www.geeksforgeeks.org/signals-c-language/}{esempi di signal in C -- da implementare nel doc}
+  \item \href{https://www.tutorialspoint.com/c_standard_library/c_function_signal.htm}{signal.h in C}
+  \item \href{https://www.computerhope.com/unix/signals.htm}{codici segnali }
+\end{itemize}
+\end{document}

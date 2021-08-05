@@ -1,0 +1,190 @@
+\section{Message Queue and Threads}
+    %atm sto copiando le slide del prof, poi aggiungo spiegazioni extra - like always
+    Una  coda  di  messaggi,  message  queue,  è  una  lista  concatenata  memorizzata all'interno  del  kernel  ed  identificata  con  una  chiave  (un  intero  positivo  univoco), chiamata queue identifier. Questa  chiave  viene  condivisa  tra  i  processi  interessati,  i  quali  generano  degli ulteriori identificativi da usare durante l'interazione con la coda.Una  coda  deve  essere  innanzitutto  generata  in  maniera  analoga  ad  una  FIFO, impostando dei permessi. Ad una coda esistente si possono aggiungere o recuperare messaggi tipicamente in modalità “autosincrona”: la lettura attende la presenza di un messaggio, la scrittura attende che via sia spazio disponibile. Questi comportamenti possono però essere configurati.
+    
+    \subsection{Queues}
+        \subsubsection{Struttura del messaggio}
+        Ogni messaggio inserito nella coda ha tre campi:
+        \begin{itemize}
+            \item Un tipo (intero “long”)
+            \item Una lunghezza non negativa
+            \item Un insieme di dati (bytes) di lunghezza corretta
+        \end{itemize}
+        
+        Al contrario delle FIFO, i messaggi in una coda possono essere recuperati anche sulla base del tipo e non solo del loro ordine “assoluto” di arrivo. Così come i files, le code sono delle strutture persistenti che continuano ad esistere, assieme ai messaggi in esse salvati, anche alla terminazione del processo che le ha create. L'eliminazione deve essere esplicita.
+        
+        \begin{lstlisting}[language=C]
+struct msg_buffer{
+    long mtype;
+    char mtext[100];
+} message;
+        \end{lstlisting}
+        \href{https://www.ibm.com/docs/en/aix/7.1?topic=files-msgh-file}{IBM} - \href{https://www.man7.org/linux/man-pages/man0/sys_msg.h.0p.html}{MANPAGE}
+        \subsubsection{Creazione coda}
+        Funzione \texttt{int msgget(key$\_$t key, int msgflg)}\\
+        
+        \href{https://man7.org/linux/man-pages/man2/msgget.2.html}{MANPAGE} Restituisce l'identificativo di una coda basandosi sulla chiave “key” e sui flags:
+        \begin{itemize}
+            \item \textbf{IPC$\_$CREAT}: crea una coda se non esiste già, altrimenti restituisce l'identificativo di quella già esistente
+            \item \textbf{IPC$\_$EXCL}: (da usare assieme al precedente) fallisce se coda già esistente
+            \item \textbf{0xxx}: numero ottale di \hyperref[sec:permessi]{permessi}, analogo a quello che si può usare nel file system 
+        \end{itemize}
+        
+        In caso di successo, il valore restituito sarà l'identificatore della coda dei messaggi (un numero intero non negativo), altrimenti -1 con errno che indica l'errore.
+
+        \begin{lstlisting}[language=C]
+#include <sys/types.h> <sys/ipc.h> <sys/msg.h> /msgget.c
+key_t queueKey = 56; //Unique key
+int queueId = msgget(queueKey, 0777 | IPC_CREAT | IPC_EXCL);
+        \end{lstlisting}
+        
+        \subsubsection{Ottenere una chiave univoca}
+        Funzione \texttt{key$\_$t ftok(const char *pathname, int proj$\_$id) }. \\
+        
+        \href{https://man7.org/linux/man-pages/man3/ftok.3.html}{MANPAGE} Restituisce  una  chiave  basandosi  sul path  (una  cartella  o  un  file),  esistente  ed accessibile nel file-system, e sull'id numerico. La chiave dovrebbe essere univoca e sempre la stessa per ogni coppia $<path,id>$ in ogni istante sullo stesso sistema.Un metodo d'uso, per evitare possibili conflitti, potrebbe essere generare un path (es. un file) temporaneo univoco, usarlo, eventualmente rimuoverlo, ed usare l'id per per rappresentare diverse “categorie” di code, a mo' di indice.
+        
+        \texttt{key$\_$t ftok(const char *path, int id)}
+        
+        \begin{lstlisting}[language=C]
+#include <sys/ipc.h> //ftok.c
+key_t queue1Key = ftok("/tmp/unique", 1);
+key_t queue2Key = ftok("/tmp/unique", 2); ...
+        \end{lstlisting}
+        
+            \paragraph{Esempio 46: creazione}\hfill \break
+\lstinputlisting[language=C]{Cap5/esempio46.c}
+        \subsubsection{Persistenza delle code}
+        Se eseguiamo questo programma dopo aver eseguito il precedente \textit{ipcCreation.c} verrà generato un errore dato che la coda esiste già ed abbiamo usato il flag \textbf{IPC$\_$EXCL}!
+            \paragraph{Esempio 47: le queue sono persistenti}\hfill \break
+        \lstinputlisting[language=C]{Cap5/esempio47.c}
+        \subsubsection{Inviare messaggi}
+        \texttt{int msgsnd(int msqid, const void *msgp, size$\_$t msgsz, int msgflg);}\\
+        
+        \href{https://linux.die.net/man/2/msgsnd}{LINUX.DIE} Aggiunge  un  messaggio  di  dimensione msgsz alla  coda  identificata  da msquid, puntata  dal  buffer msgp.  Il  messaggio  viene  inserito  immediatamente  se  c'è abbastanza spazio disponibile, altrimenti la chiamata si blocca fino a che abbastanza spazio diventa disponibile. Se msgflg è \textbf{IPC$\_$NOWAIT} allora la chiamata fallisce in assenza di spazio.
+        
+        \subsubsection{Ricevere messaggi}
+        \texttt{ssize$\_$t msgrcv(int msqid,void *msgp,size$\_$t msgsz,long msgtyp,int msgflg)}\\
+
+        \href{https://linux.die.net/man/2/msgsnd}{LINUX.DIE} Rimuove un messaggio dalla coda msqid e lo salva nel buffer msgp. msgsz specifica la lunghezza  massima  del  testo  del  messaggio  (mtext  della  struttura msgp).  Se  il messaggio  ha  una  lunghezza  maggiore  e  \textit{msgflg}  è  \textbf{MSG$\_$NOERROR}  allora  il messaggio viene troncato (viene persa la parte in eccesso), se \textbf{MSG$\_$NOERROR} non è specificato allora il messaggio non viene eliminato e la chiamata fallisce. A seconda di \textit{msgtyp} viene recuperato il messaggio:
+        \begin{itemize}
+            \item \textit{msgtyp} = 0: primo messaggio della coda
+            \item \textit{msgtyp} $>$ 0: primo messaggio di tipo \textit{msgtyp}, o primo messaggio di tipo diverso da \textit{msgtyp} se \textbf{MSG\_EXCEPT} è impostato come flag
+            \item \textit{msgtyp} $<$ 0: primo messaggio il cui tipo T è \texttt{min(T<=|msgtyp|)}. In fine, il flag \textbf{IPC\_NOWAIT} fa fallire la syscall se non sono presenti messaggi (altrimenti hang)
+        \end{itemize}
+
+            \paragraph{Esempio 48: comunicazione}\hfill \break
+        \lstinputlisting[language=C]{Cap5/esempio48.c}
+        \subsubsection{Modificare la coda}
+        \texttt{int msgctl(int msqid, int cmd, struct msqid$\_$ds *buf);}\\
+        
+        \href{https://man7.org/linux/man-pages/man2/msgctl.2.html}{MANPAGE} Modifica la coda identificata da \textit{msqid} secondo i comandi cmd, riempiendo buf con informazioni  sulla  coda  (ad  esempio  tempo  di  ultima  scrittura,  di  ultima  lettura, numero messaggi nella coda, etc...). I valori per cmd sono:
+        \begin{itemize}
+            \item \textbf{IPC$\_$STAT}: recupera informazioni da kernel
+            \item \textbf{IPC$\_$SET}: imposta alcuni parametri a seconda di buf
+            \item \textbf{IPC$\_$RMID}: rimuove immediatamente la coda
+            \item \textbf{IPC$\_$INFO}: recupera informazioni generali sui limiti delle code nel sistema
+            \item \textbf{MSG$\_$INFO}: come \textbf{IPC$\_$INFO} ma con informazioni differenti
+            \item \textbf{MSG$\_$STAT}: come \textbf{IPC$\_$STAT} ma con informazioni differenti
+        
+        \end{itemize}
+
+            \paragraph{msqid$\_$ds structure}\hfill \break
+        \begin{lstlisting}[language=C]
+struct msqid_ds {
+  struct ipc_perm msg_perm; /* Ownership and permissions */
+  time_t msg_stime; /* Time of last msgsnd(2) */
+  time_t msg_rtime; /* Time of last msgrcv(2) */
+  time_t msg_ctime; //Time of creation or last modification by msgctl
+  unsigned long msg_cbytes; /* # of bytes in queue */
+  msgqnum_t msg_qnum; /* # of messages in queue */
+  msglen_t msg_qbytes; /* Maximum # of bytes in queue */
+  pid_t msg_lspid; /* PID of last msgsnd(2) */
+  pid_t msg_lrpid; /* PID of last msgrcv(2) */
+};
+        \end{lstlisting}
+            \paragraph{ipc$\_$perm structure}\hfill \break
+        \begin{lstlisting}[language=C]
+ struct ipc_perm {
+   key_t __key; /* Key supplied to msgget(2) */
+   uid_t uid; /* Effective UID of owner */
+   gid_t gid; /* Effective GID of owner */
+   uid_t cuid; /* Effective UID of creator */
+   gid_t cgid; /* Effective GID of creator */
+   unsigned shortmode; /* Permissions */
+   unsigned short __seq; /* Sequence number */
+ };     
+        \end{lstlisting}
+        \paragraph{Esempio 49: modifica}\hfill \break
+        \lstinputlisting[language=C]{Cap5/esempio49.c}
+    \subsection{Threads}
+    I thread sono singole sequenze di esecuzione all'interno di un processo, aventi alcune delle proprietà dei processi. Non sono indipendenti tra loro: condividono il codice, i dati e le risorse del sistema assegnate al processo di appartenenza. Come ogni singolo processo hanno alcuni elementi indipendenti, come lo stack, il PC ed i registri del sistema. La creazione di threads consente un parallelismo delle operazioni in maniera rapida e semplificata. Context switch tra threads è rapido, così come la loro creazione, terminazione e comunicazione.
+    
+    Per la compilazione è necessario aggiungere il flag \texttt{-pthread} \\  ad esempio:texttt{gcc -o program main.c -pthread}
+        \subsubsection{Creazione}
+        In C i thread corrispondono a delle funzioni eseguite in parallelo al codice principale. Ogni thread è identificato da un ID e può essere gestito come un processo figlio, con funzioni che attendono la sua terminazione.
+            \begin{lstlisting}[language=C]
+int pthread_create(
+    pthread_t *restrict thread, /* Thread ID */
+    const pthread_attr_t *restrict attr, /* Attributes */
+    void *(*start_routine)(void *), /* Function to be executed */
+    void *restrict arg /* Parameters to above function */
+);
+            \end{lstlisting}
+            \paragraph{Esempio 50: Creazione}\hfill \break
+            \lstinputlisting[language=C]{Cap5/esempio50.c}
+        \subsubsection{Terminazione}
+Un nuovo thread termina in uno dei seguenti modi:
+
+        \begin{itemize}
+            \item Chiamando la funzione noreturn void pthread$\_$exit(void *retval); specificando un puntatore di ritorno.
+            \item Ritorna dalla funziona associata al thread specificando un valore di ritorno.
+            \item Viene cancellato
+            \item Qualche thread chiama exit(), o il thread che esegue main() ritorna dallo stesso, terminando così tutti i threads.
+        \end{itemize}
+
+        \subsubsection{Cancellazione Thread}
+        \texttt{int pthread$\_$cancel(pthread$\_$t thread);} \\
+        
+        Invia una richiesta di cancellazione al thread specificato, il quale reagirà (come e quando)  a  seconda  di  due  suoi  attributi: state e type. State può  essere enabled(default) o disabled: se disabled la richiesta rimarrà in attesa fino a che state diventa enabled, se enabled la cancellazione avverrà a seconda di type. Type può essere deferred (default) o asynchronous: attende la chiamata di un cancellation point o termina  in  qualsiasi  momento,  rispettivamente.  Cancellation  points  sono  funzioni definite nella libreria pthread.h (lista). State e typepossono essere modificati:\\ \\
+        \texttt{int pthread$\_$setcancelstate(int state, int *oldstate);}
+        
+        Con state = PTHREAD$\_$CANCEL$\_$DISABLE o PTHREAD$\_$CANCEL$\_$ENABLE 
+        \\ \\
+        \texttt{int pthread$\_$setcanceltype(int type, int *oldtype);}
+        
+        Con type = PTHREAD$\_$CANCEL$\_$DEFERRED o PTHREAD$\_$CANCEL$\_$ASYNCHRONOUS
+            \paragraph{Esempio 51: Creazione e cancellazione}\hfill \break
+            \lstinputlisting[language=C]{Cap5/esempio51.c}
+        \subsubsection{Aspettare un Thread}
+        Un processo (thread) che avvia un nuovo thread può aspettare la sua terminazione mediante la funzione:\\ 
+        \texttt{int pthread$\_$join(pthread$\_$t thread, void **retval);}\\
+        Che ritorna quando il thread identificato da thread termina, o subito se il thread è già terminato. Se il valore di ritorno del thread non è nullo (parametro di pthread$\_$exit o di return), esso viene salvato nella variabile puntata da retval. Se il thread era stato cancellato, retval è riempito con PTHREAD$\_$CANCELED.Solo se il thread è joinable può essere aspettato! Un thread può essere aspettato da al massimo un thread!
+            \paragraph{Esempio 52: Join 1}\hfill \break
+            \lstinputlisting[language=C]{Cap5/esempio52.c}
+            \paragraph{Esempio 53: Join 2}\hfill \break
+            \lstinputlisting[language=C]{Cap5/esempio53.c}
+            \paragraph{Esempio 54: Join 3}\hfill \break
+            \lstinputlisting[language=C]{Cap5/esempio54.c}
+        Ogni thread viene creato con degli attributi specificati nella struttura pthread$\_$attr$\_$t. Questa struttura, analogamente alla struttura usata per gestire le maschere dei segnali, è un oggetto usato solo alla creazione di un thread, ed è poi indipendente dallo stesso (se cambia,  gli  attributi  del  thread  non  cambiano).  La  struttura  va  inizializzata  con int  pthread$\_$attr$\_$init(pthread$\_$attr$\_$t  *attr); che  imposta  tutti  gli attributi al loro valore di default. Una volta usata e non più necessaria, la struttura va distrutta con     int pthread$\_$attr$\_$destroy(pthread$\_$attr$\_$t *attr);I vari attributi della struct possono, e devono, essere modificati singolarmente con le seguenti funzioni:int pthread$\_$attr$\_$setxxxx(pthread$\_$attr$\_$t *attr, params);int pthread$\_$attr$\_$getxxxx(const pthread$\_$attr$\_$t *attr, params);
+        
+        \begin{itemize}
+            \item ...detachstate(pthread$\_$attr$\_$t *attr, int detachstate)
+                \begin{itemize}
+                    \item PTHREAD$\_$CREATE$\_$DETACHED -> non può essere aspettato
+                    \item PTHREAD$\_$CREATE$\_$JOINABLE -> default, può essere aspettato
+                    \item Può essere cambiato durante l'esecuzione con int pthread$\_$detach(pthread$\_$t thread);
+                \end{itemize}
+            \item ...sigmask$\_$np(pthread$\_$attr$\_$t *attr,const sigset$\_$t *sigmask);
+            \item ...affinity$\_$np(...)
+            \item ...setguardsize(...)
+            \item ...inheritsched(...)
+            \item ...schedparam(...)
+            \item ...schedpolicy(...)
+            \item altri
+        \end{itemize}
+
+        \subsubsection{Detached e joinable threads}
+         I threads vengono creati di default nello stato joinable, il che consente ad un altro thread di attendere la loro terminazione attraverso il comando pthread$\_$join. I thread joinable rilasciano le proprie risorse non alla terminazione ma quando un thread fa il join con loro (salvando lo stato di uscita) (così come i sottoprocessi), oppure alla terminazione del processo. Contrariamente, i thread in stato detached liberano le loro risorse immediatamente una volta terminati, ma non consentono ad altri processi di fare il “join”.NB:  un  thread  detached  non  può  diventare  joinable  durante  la  sua  esecuzione, mentre il contrario è possibile.
+            \paragraph{Esempio 55: Attributi}\hfill \break
+            \lstinputlisting[language=C]{Cap5/esempio55.c}
+%\section*{Unnumbered Section}
